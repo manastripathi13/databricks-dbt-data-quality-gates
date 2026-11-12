@@ -32,7 +32,40 @@ On defect days the gate still passed: quarantine had already removed the bad row
 
 Full per-day table, quarantine counts, revenue KPIs and lineage: [`docs/RESULTS.md`](docs/RESULTS.md).
 
-## Run it locally (no Databricks or Azure account needed)
+## Run it with Airflow (the main way)
+
+All pipeline runs go through Airflow. The DAGs live in [`airflow/dags/`](airflow/dags/):
+
+| DAG | Schedule | Tasks |
+|---|---|---|
+| `revenue_quality_daily` | `@daily`, 2026-06-01 to 2026-06-10 with catch-up | `prepare` → `land_daily_drop` → `run_lakeflow_pipeline` → `quality_gate` → `dbt_build_gold` → `record_run`, plus `alert_gold_blocked` (runs only if the gate fails) |
+| `revenue_quality_report` | manual | `baseline_on_raw_drops` → `dbt_build_scorecard` → `write_report` |
+| `revenue_quality_reset` | manual | `reset_local_state` |
+
+Unpausing `revenue_quality_daily` plays the 10 simulated business days in order (about 5 minutes each). If the quality gate fails, `dbt_build_gold` is skipped and `alert_gold_blocked` runs, which is the same branching as the ADF pipeline in [`adf/`](adf/). Then trigger `revenue_quality_report` to measure the SLA and write `docs/RESULTS.md`.
+
+Spark tasks use an Airflow pool, `spark_metastore`, with one slot, because the local embedded metastore allows one Spark process at a time. Create it once:
+
+```bash
+airflow pools set spark_metastore 1 "one Spark process at a time"
+```
+
+**Start a local Airflow 3 pointed at this repo's DAGs** (web UI on http://localhost:8081, no login):
+
+```bash
+uv venv --python 3.12 ~/airflow-venv
+curl -sO https://raw.githubusercontent.com/apache/airflow/constraints-3.2.2/constraints-3.12.txt
+uv pip install --python ~/airflow-venv/bin/python -c constraints-3.12.txt apache-airflow==3.2.2 apache-airflow-providers-standard
+
+export AIRFLOW_HOME=~/airflow AIRFLOW__CORE__DAGS_FOLDER="$PWD/airflow/dags" AIRFLOW__CORE__LOAD_EXAMPLES=False \
+       AIRFLOW__API__PORT=8081 AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS=True \
+       AIRFLOW__CORE__EXECUTION_API_SERVER_URL=http://localhost:8081/execution/ PATH="$HOME/airflow-venv/bin:$PATH"
+airflow standalone
+```
+
+Tasks call this repo's own `uv` environment (`uv run ...`), so Airflow and the project keep separate dependencies. The constraints file pins Airflow's dependencies to the versions it was tested with; without it a newer Pydantic breaks Airflow 3.2's API server.
+
+## Run it without Airflow (no Databricks or Azure account needed)
 
 Requirements: [uv](https://docs.astral.sh/uv/), Java 17+. No Docker needed.
 
