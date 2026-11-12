@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+.pytest_cache/
+data/
+data_demo.log
+derby.log
+conf/spark-defaults.conf
+pipelines/spark-pipeline.yml
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+spark-warehouse/
+metastore_db/
+.user.yml

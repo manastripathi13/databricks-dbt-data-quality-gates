@@ -1,0 +1,42 @@
+version: 2
+# Downstream BI consumers. dbt draws lineage from every dashboard back to the raw sources,
+# so before changing a model you can see exactly which dashboards it affects.
+exposures:
+  - name: executive_arr_dashboard
+    label: Executive ARR Dashboard
+    type: dashboard
+    maturity: high
+    url: https://app.powerbi.com/groups/revenue/reports/executive-arr
+    description: ARR trend by product and segment, NRR/GRR for the leadership team.
+    owner: {name: Finance BI, email: finance-bi@company.example}
+    depends_on: [ref('rpt_arr_by_product'), ref('rpt_net_revenue_retention'), ref('dim_customer')]
+  - name: revops_pipeline_review
+    label: RevOps Pipeline Review
+    type: dashboard
+    maturity: high
+    url: https://app.powerbi.com/groups/revenue/reports/pipeline-review
+    description: Weekly pipeline, weighted forecast and bookings by segment.
+    owner: {name: RevOps, email: revops@company.example}
+    depends_on: [ref('fct_pipeline'), ref('dim_customer')]
+  - name: customer_success_health
+    label: Customer Success Health
+    type: dashboard
+    maturity: medium
+    url: https://app.powerbi.com/groups/revenue/reports/cs-health
+    description: At-risk accounts and upsell candidates per CSM.
+    owner: {name: Customer Success Ops, email: cs-ops@company.example}
+    depends_on: [ref('rpt_customer_health'), ref('rpt_usage_overage')]
+  - name: finance_usage_billing
+    label: Usage Billing Report
+    type: analysis
+    maturity: high
+    description: Month-end overage invoicing input for Finance.
+    owner: {name: Billing Ops, email: billing-ops@company.example}
+    depends_on: [ref('rpt_usage_overage')]
+  - name: data_quality_scorecard
+    label: Data Quality Scorecard
+    type: dashboard
+    maturity: medium
+    description: Daily pass rate and critical failures per layer, for the data team.
+    owner: {name: Data Engineering, email: data-eng@company.example}
+    depends_on: [ref('rpt_data_quality_daily')]

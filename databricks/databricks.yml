@@ -1,0 +1,57 @@
+# Databricks Asset Bundle: deploys the Lakeflow pipeline and the daily job.
+# Deploy with:  databricks bundle deploy -t prod   (requires the Databricks CLI and a workspace)
+bundle:
+  name: revenue-quality
+
+variables:
+  landing_path:
+    description: ADLS path where source drops land
+    default: abfss://landing@revenuelake.dfs.core.windows.net
+  warehouse_id:
+    description: SQL warehouse used by the dbt task
+
+targets:
+  prod:
+    mode: production
+    workspace:
+      host: https://adb-0000000000000000.0.azuredatabricks.net
+
+resources:
+  pipelines:
+    revenue_quality_pipeline:
+      name: revenue-quality-pipeline
+      catalog: revenue
+      schema: silver
+      serverless: true
+      continuous: false
+      configuration:
+        revenue.landing_path: ${var.landing_path}
+      libraries:
+        - file:
+            path: ./lakeflow_pipeline.py
+
+  jobs:
+    revenue_daily:
+      name: revenue-daily
+      tasks:
+        - task_key: lakeflow_pipeline
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.revenue_quality_pipeline.id}
+        - task_key: quality_gate
+          depends_on: [{task_key: lakeflow_pipeline}]
+          spark_python_task:
+            python_file: ../quality/run_gate.py
+            parameters: ["--run-date", "{{job.start_time.iso_date}}"]
+          environment_key: gx
+        - task_key: dbt_gold
+          depends_on: [{task_key: quality_gate}]   # runs only if the gate succeeded
+          dbt_task:
+            project_directory: ../dbt
+            commands: ["dbt deps", "dbt build --target databricks"]
+            warehouse_id: ${var.warehouse_id}
+          environment_key: dbt
+      environments:
+        - environment_key: gx
+          spec: {client: "2", dependencies: ["great-expectations>=1.20"]}
+        - environment_key: dbt
+          spec: {client: "2", dependencies: ["dbt-databricks>=1.10"]}

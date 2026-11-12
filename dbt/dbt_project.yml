@@ -1,0 +1,13 @@
+name: revenue_gold
+version: "1.0.0"
+config-version: 2
+profile: revenue_gold
+
+vars:
+  period_start: "2026-06-01"
+
+models:
+  revenue_gold:
+    +materialized: table
+    +file_format: delta
+    +schema: gold

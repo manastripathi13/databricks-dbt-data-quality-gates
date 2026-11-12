@@ -1,0 +1,17 @@
+version: 2
+sources:
+  - name: silver
+    description: Validated Silver tables produced by the declarative pipeline (pipelines/).
+    schema: revenue
+    tables:
+      - name: silver_accounts
+      - name: silver_subscriptions
+      - name: silver_subscriptions_history
+        description: SCD Type 2 history of subscriptions (valid_from / valid_to / is_current).
+      - name: silver_usage
+      - name: silver_opportunities
+  - name: dq
+    description: Great Expectations results written by quality/run_gate.py.
+    schema: dq
+    tables:
+      - name: validation_results

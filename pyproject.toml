@@ -1,0 +1,13 @@
+[project]
+name = "databricks-dbt-data-quality-gates"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "dbt-spark[session]>=1.11.0",
+    "delta-spark==4.4.1",
+    "great-expectations>=1.20",
+    "pandas<3",
+    "pyspark[connect,pipelines]==4.2.0",
+    "pytest>=9.2.0",
+    "pyyaml>=6.0.3",
+]

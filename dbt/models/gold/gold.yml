@@ -1,0 +1,42 @@
+version: 2
+models:
+  - name: dim_customer
+    description: One row per customer with current MRR/ARR, products and status (active, churned, prospect).
+    columns:
+      - name: account_id
+        data_tests: [unique, not_null]
+      - name: customer_status
+        data_tests:
+          - accepted_values:
+              arguments: {values: [active, churned, prospect]}
+  - name: fct_mrr_daily
+    description: MRR per subscription per day, rebuilt from the SCD Type 2 subscription history.
+    data_tests:
+      - unique_combination_of_columns:
+          arguments: {columns: [as_of_date, subscription_id]}
+    columns:
+      - name: mrr_usd
+        data_tests: [not_null]
+  - name: rpt_arr_by_product
+    description: Daily ARR, MRR and paying customers by product and segment.
+  - name: rpt_net_revenue_retention
+    description: Net and gross revenue retention for the period's starting customers.
+  - name: rpt_usage_overage
+    description: Month-to-date usage vs prorated entitlement, utilisation and overage revenue per subscription.
+    columns:
+      - name: subscription_id
+        data_tests: [unique, not_null]
+  - name: rpt_customer_health
+    description: Explainable 0-100 health score per active customer for Customer Success.
+    columns:
+      - name: health_status
+        data_tests:
+          - accepted_values:
+              arguments: {values: [healthy, at risk, upsell candidate]}
+  - name: fct_pipeline
+    description: Sales pipeline, one row per opportunity with stage-weighted value.
+    columns:
+      - name: opportunity_id
+        data_tests: [unique, not_null]
+  - name: rpt_data_quality_daily
+    description: Daily data quality scorecard per layer from Great Expectations results.

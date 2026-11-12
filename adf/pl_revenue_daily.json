@@ -1,0 +1,86 @@
+{
+  "name": "pl_revenue_daily",
+  "properties": {
+    "description": "Daily revenue data platform run: land files, run the Lakeflow pipeline, gate Silver with Great Expectations, then build Gold with dbt. Gold is only refreshed if the gate passes.",
+    "parameters": {
+      "runDate": { "type": "string", "defaultValue": "@formatDateTime(utcNow(), 'yyyy-MM-dd')" }
+    },
+    "variables": { "pipelineUpdateState": { "type": "String" } },
+    "activities": [
+      {
+        "name": "Copy source drops to ADLS landing",
+        "type": "Copy",
+        "inputs": [{ "referenceName": "ds_source_drops", "type": "DatasetReference" }],
+        "outputs": [{ "referenceName": "ds_adls_landing", "type": "DatasetReference",
+                      "parameters": { "day": "@pipeline().parameters.runDate" } }],
+        "typeProperties": { "source": { "type": "BinarySource" }, "sink": { "type": "BinarySink" } }
+      },
+      {
+        "name": "Start Lakeflow pipeline update",
+        "type": "WebActivity",
+        "dependsOn": [{ "activity": "Copy source drops to ADLS landing", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "method": "POST",
+          "url": "@concat(pipeline().globalParameters.databricksUrl, '/api/2.0/pipelines/', pipeline().globalParameters.lakeflowPipelineId, '/updates')",
+          "body": { "full_refresh": false },
+          "authentication": { "type": "MSI", "resource": "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d" }
+        }
+      },
+      {
+        "name": "Wait for pipeline update",
+        "type": "Until",
+        "dependsOn": [{ "activity": "Start Lakeflow pipeline update", "dependencyConditions": ["Succeeded"] }],
+        "typeProperties": {
+          "expression": { "value": "@or(equals(variables('pipelineUpdateState'), 'COMPLETED'), equals(variables('pipelineUpdateState'), 'FAILED'))", "type": "Expression" },
+          "timeout": "0.02:00:00",
+          "activities": [
+            { "name": "Poll every 60s", "type": "Wait", "typeProperties": { "waitTimeInSeconds": 60 } },
+            {
+              "name": "Get update state", "type": "WebActivity",
+              "dependsOn": [{ "activity": "Poll every 60s", "dependencyConditions": ["Succeeded"] }],
+              "typeProperties": {
+                "method": "GET",
+                "url": "@concat(pipeline().globalParameters.databricksUrl, '/api/2.0/pipelines/', pipeline().globalParameters.lakeflowPipelineId, '/updates/', activity('Start Lakeflow pipeline update').output.update_id)",
+                "authentication": { "type": "MSI", "resource": "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d" }
+              }
+            },
+            {
+              "name": "Store state", "type": "SetVariable",
+              "dependsOn": [{ "activity": "Get update state", "dependencyConditions": ["Succeeded"] }],
+              "typeProperties": { "variableName": "pipelineUpdateState", "value": "@activity('Get update state').output.update.state" }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Great Expectations gate on Silver",
+        "type": "DatabricksSparkPython",
+        "dependsOn": [{ "activity": "Wait for pipeline update", "dependencyConditions": ["Succeeded"] }],
+        "linkedServiceName": { "referenceName": "ls_databricks", "type": "LinkedServiceReference" },
+        "typeProperties": {
+          "pythonFile": "dbfs:/Workspace/revenue-quality/quality/run_gate.py",
+          "parameters": ["--run-date", "@pipeline().parameters.runDate"]
+        }
+      },
+      {
+        "name": "dbt build Gold",
+        "type": "DatabricksJob",
+        "dependsOn": [{ "activity": "Great Expectations gate on Silver", "dependencyConditions": ["Succeeded"] }],
+        "linkedServiceName": { "referenceName": "ls_databricks", "type": "LinkedServiceReference" },
+        "typeProperties": { "jobId": "@pipeline().globalParameters.dbtGoldJobId",
+                            "jobParameters": { "run_date": "@pipeline().parameters.runDate" } }
+      },
+      {
+        "name": "Alert: Gold blocked by quality gate",
+        "type": "WebActivity",
+        "dependsOn": [{ "activity": "Great Expectations gate on Silver", "dependencyConditions": ["Failed"] }],
+        "typeProperties": {
+          "method": "POST",
+          "url": "@pipeline().globalParameters.teamsWebhookUrl",
+          "body": { "text": "@concat('Revenue Gold NOT refreshed for ', pipeline().parameters.runDate, ': critical data quality failure. Dashboards show the last good data. See Great Expectations Data Docs and dq.validation_results.')" }
+        }
+      }
+    ],
+    "annotations": ["revenue", "data-quality", "lakeflow", "dbt"]
+  }
+}

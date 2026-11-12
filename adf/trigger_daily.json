@@ -1,0 +1,9 @@
+{
+  "name": "tr_revenue_daily_0600",
+  "properties": {
+    "type": "ScheduleTrigger",
+    "typeProperties": { "recurrence": { "frequency": "Day", "interval": 1, "startTime": "2026-06-01T06:00:00Z", "timeZone": "UTC" } },
+    "pipelines": [{ "pipelineReference": { "referenceName": "pl_revenue_daily", "type": "PipelineReference" },
+                    "parameters": { "runDate": "@formatDateTime(trigger().scheduledTime, 'yyyy-MM-dd')" } }]
+  }
+}
