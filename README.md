@@ -4,6 +4,8 @@ A daily revenue data platform for a B2B SaaS company. It takes three siloed, som
 
 **Stack:** Azure Databricks (Lakeflow Declarative Pipelines) · Azure Data Factory · dbt · Delta Lake · Great Expectations · Python
 
+**System design:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the architecture diagrams and a step-by-step walkthrough of the design, decisions and failure handling.
+
 ```
  CRM (CSV) ─────┐                 ┌──────────── Lakeflow / Spark Declarative Pipeline ─────────────┐
  Billing CDC ───┼─► landing zone ─┤ BRONZE streaming tables ─► SILVER (typed, de-duplicated, SCD2)  │
